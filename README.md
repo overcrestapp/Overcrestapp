@@ -15,8 +15,7 @@ En kreativ målarapp där barn kan **måla blanka fiskedrag** – som wobbler oc
 
 ## Webbplats
 Den här repot är källan till vår publika sida på GitHub Pages:  
-`https://<ditt-github-användarnamn>.github.io/OvercrestApp/`
-
+`https://overcrestapp.github.io/Overcrestapp/?v1)
 ## Kontakt
 - E-post: **overcrestapp@gmail.com**
 
