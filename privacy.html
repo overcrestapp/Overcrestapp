@@ -1,1 +1,141 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Privacy Policy – OvercrestApp</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6;margin:0;background:#fff;color:#222}
+    header{background:#0059b3;color:#fff;padding:24px 16px;text-align:center}
+    main{max-width:900px;margin:0 auto;padding:24px}
+    h1,h2{margin:0 0 8px}
+    h2{margin-top:24px;color:#0059b3}
+    .lang-toggle{display:flex;gap:8px;margin:12px 0 24px}
+    .btn{border:1px solid #ddd;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .btn[aria-pressed="true"]{border-color:#0059b3;box-shadow:0 0 0 2px rgba(0,89,179,.15)}
+    .en{display:none}
+    footer{margin:40px 0 0;color:#666;font-size:.95rem}
+    a{color:#0059b3}
+    ul{padding-left:18px}
+  </style>
+  <script>
+    function setLang(lang){
+      document.querySelectorAll('.sv,.en').forEach(el=>el.style.display='none');
+      document.querySelectorAll('.'+lang).forEach(el=>el.style.display='block');
+      document.getElementById('btn-sv').setAttribute('aria-pressed', lang==='sv');
+      document.getElementById('btn-en').setAttribute('aria-pressed', lang==='en');
+    }
+    document.addEventListener('DOMContentLoaded', ()=> setLang('sv'));
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Privacy Policy</h1>
+    <p>OvercrestApp</p>
+  </header>
+  <main>
+    <div class="lang-toggle" role="tablist" aria-label="Language toggle">
+      <button id="btn-sv" class="btn" onclick="setLang('sv')" aria-pressed="true">Svenska</button>
+      <button id="btn-en" class="btn" onclick="setLang('en')" aria-pressed="false">English</button>
+    </div>
 
+    <!-- ===== SVENSKA ===== -->
+    <section class="sv">
+      <h2>Översikt</h2>
+      <p><strong>Gäller för:</strong> OvercrestApps webbplats och mobilappar, inklusive <em>Fish Paint Play</em>.</p>
+      <p>Vi värnar om din integritet. Våra appar är byggda för barn och familjer och samlar inte in personuppgifter.</p>
+
+      <h2>Personuppgifter vi behandlar</h2>
+      <ul>
+        <li><strong>Ingen kontoregistrering:</strong> våra appar kan användas utan konto.</li>
+        <li><strong>Ingen spårning/analys:</strong> vi använder inte cookies, SDK:er eller analysverktyg som identifierar dig.</li>
+        <li><strong>Ingen platsdata, ingen kontaktbok, inga foton:</strong> vi begär inte åtkomst till känsliga behörigheter.</li>
+      </ul>
+
+      <h2>Annonsvisning</h2>
+      <p>Som standard visar vi <strong>inga annonser</strong> i <em>Fish Paint Play</em>. Om vi i framtiden lägger till annonser (t.ex. AdMob) kommer vi att:</p>
+      <ul>
+        <li>uppdatera denna policy innan ändringen träder i kraft,</li>
+        <li>visa endast <strong>barnvänliga</strong> annonser, och</li>
+        <li>inaktivera personanpassning för barn (COPPA-efterlevnad).</li>
+      </ul>
+
+      <h2>Barns integritet (COPPA & GDPR-barn)</h2>
+      <ul>
+        <li>Våra appar är utformade för barn. Vi samlar <strong>inte</strong> in personuppgifter från barn.</li>
+        <li>Externa länkar (t.ex. till butikssidor) placeras bakom en enkel föräldragate.</li>
+      </ul>
+
+      <h2>Rättslig grund och personuppgiftsansvarig</h2>
+      <p><strong>Personuppgiftsansvarig:</strong> OvercrestApp (Sverige) · Kontakt: <a href="mailto:overcrestapp@gmail.com">overcrestapp@gmail.com</a></p>
+      <p>Eftersom vi inte samlar in personuppgifter behandlar vi ingen data med stöd av GDPR-grunder. Om vi inför databehandling senare kommer vi att ange rättslig grund här.</p>
+
+      <h2>Lagring och delning</h2>
+      <p>Vi lagrar inte personuppgifter och delar därför inte personuppgifter med tredje part.</p>
+
+      <h2>Dina rättigheter</h2>
+      <p>Om du kontaktar oss om radering, åtkomst eller frågor kommer vi att svara skyndsamt. För närvarande finns inget att radera/överlämna eftersom vi inte behandlar persondata.</p>
+
+      <h2>Säkerhet</h2>
+      <p>Vi begränsar behörigheter i appen till det som är nödvändigt för funktion (för närvarande inga känsliga behörigheter).</p>
+
+      <h2>Ändringar</h2>
+      <p>Vi kan uppdatera denna policy. Senaste datum visas nedan, och väsentliga ändringar kommuniceras i appen/webbplatsen.</p>
+
+      <h2>Kontakt</h2>
+      <p>Maila <a href="mailto:overcrestapp@gmail.com">overcrestapp@gmail.com</a> vid frågor.</p>
+
+      <footer>Giltig från: 10 Oct 2025 · Version 1.0</footer>
+    </section>
+
+    <!-- ===== ENGLISH ===== -->
+    <section class="en">
+      <h2>Overview</h2>
+      <p><strong>Applies to:</strong> OvercrestApp website and mobile apps, including <em>Fish Paint Play</em>.</p>
+      <p>We respect your privacy. Our apps are built for kids and families and do not collect personal data.</p>
+
+      <h2>Personal Data We Process</h2>
+      <ul>
+        <li><strong>No account:</strong> our apps can be used without registration.</li>
+        <li><strong>No tracking/analytics:</strong> we do not use cookies, IDs, or analytics SDKs that identify you.</li>
+        <li><strong>No location, contacts, or photos:</strong> we do not request sensitive permissions.</li>
+      </ul>
+
+      <h2>Ads</h2>
+      <p>By default, <em>Fish Paint Play</em> shows <strong>no ads</strong>. If we add ads in the future (e.g., AdMob), we will:</p>
+      <ul>
+        <li>update this policy before the change takes effect,</li>
+        <li>show only <strong>family-safe</strong> ads, and</li>
+        <li>disable personalized ads for children (COPPA compliance).</li>
+      </ul>
+
+      <h2>Children’s Privacy (COPPA & GDPR-Kids)</h2>
+      <ul>
+        <li>Our apps are designed for children. We do <strong>not</strong> collect personal data from children.</li>
+        <li>External links (e.g., store pages) are placed behind a simple parental gate.</li>
+      </ul>
+
+      <h2>Legal Basis & Controller</h2>
+      <p><strong>Controller:</strong> OvercrestApp (Sweden) · Contact: <a href="mailto:overcrestapp@gmail.com">overcrestapp@gmail.com</a></p>
+      <p>Since we do not collect personal data, no GDPR processing occurs. If processing is introduced later, we will state the legal basis here.</p>
+
+      <h2>Storage & Sharing</h2>
+      <p>We do not store personal data and therefore do not share it with third parties.</p>
+
+      <h2>Your Rights</h2>
+      <p>If you contact us about deletion, access, or questions, we will respond promptly. Currently there is nothing to delete/transfer as we do not process personal data.</p>
+
+      <h2>Security</h2>
+      <p>We keep app permissions minimal (currently none of the sensitive ones).</p>
+
+      <h2>Changes</h2>
+      <p>We may update this policy. The latest date is shown below; material changes will be communicated in-app/on the website.</p>
+
+      <h2>Contact</h2>
+      <p>Email <a href="mailto:overcrestapp@gmail.com">overcrestapp@gmail.com</a> with any questions.</p>
+
+      <footer>Effective: 10 Oct 2025 · Version 1.0</footer>
+    </section>
+  </main>
+</body>
+</html>
