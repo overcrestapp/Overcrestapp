@@ -1,13 +1,11 @@
-<!-- VERSION: 2025-10-15_12-25 -->
-
 <!doctype html>
 <html lang="sv">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Digital Fordonswhiteboard</title>
-   <script src="https://cdn.tailwindcss.com?v=2025-10-15_1200"></script>
-      <style>
+    <script src="https://cdn.tailwindcss.com?v=2025-10-15_1235"></script>
+    <style>
       textarea { resize: none; overflow: hidden; }
       textarea::-webkit-resizer { display: none; }
       body { background-color: #0b1220; }
@@ -24,36 +22,37 @@
         <div id="measure-row2" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
       </div>
 
-      <!-- 21 fordonsrader -->
+      <!-- Fordonsrader -->
       <div id="vehicles" class="space-y-3"></div>
     </div>
 
     <script>
-      // ---- helpers (överst) ----
+      // Hjälpfunktioner
       function el(tag, cls, text){ const n=document.createElement(tag); if(cls) n.className=cls; if(text!=null) n.textContent=text; return n; }
-      function autoGrow(ta){
-        const MIN = 44; // px – samma bas som ELD 67
-        ta.style.height = MIN + "px";
-        ta.style.height = Math.max(MIN, ta.scrollHeight) + "px";
-      }
+      function autoGrow(ta){ const MIN=44; ta.style.height=MIN+"px"; ta.style.height=Math.max(MIN, ta.scrollHeight)+"px"; }
 
-      // ---- nätklocka ----
+      // Svensk nät-tid
       const netClock = { ok:false, offsetMs:0 };
       (async () => {
         try {
-          const r = await fetch('https://worldtimeapi.org/api/timezone/Europe/Stockholm', { cache: 'no-store' });
+          const r = await fetch('https://worldtimeapi.org/api/timezone/Europe/Stockholm',{cache:'no-store'});
           const j = await r.json();
           netClock.offsetMs = Date.parse(j.datetime) - Date.now();
           netClock.ok = true;
         } catch { netClock.ok = false; }
       })();
-      function nowStamp(){ const ms=Date.now()+(netClock.ok?netClock.offsetMs:0); return new Date(ms).toLocaleString('sv-SE',{dateStyle:'short',timeStyle:'short'}); }
+      function nowStamp(){
+        const ms = Date.now() + (netClock.ok ? netClock.offsetMs : 0);
+        return new Date(ms).toLocaleString('sv-SE',{dateStyle:'short',timeStyle:'short'});
+      }
 
-      // ---- state ----
+      // State
       const LS_KEY="fordonsboard_v8_fix2";
-      const state=load()||{rows:{},measures:{}}; function load(){try{return JSON.parse(localStorage.getItem(LS_KEY))}catch{return null}} function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}}
+      const state=load()||{rows:{},measures:{}}; 
+      function load(){try{return JSON.parse(localStorage.getItem(LS_KEY))}catch{return null}}
+      function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}}
 
-      // ---- mätning ----
+      // Mätning
       const fRoot=document.getElementById("measure-f");
       ["F1","F2","F3"].forEach(tag=>fRoot.appendChild(makeMeasureBox(tag,"Mätvärde…",true)));
       const row1=document.getElementById("measure-row1");
@@ -68,54 +67,53 @@
         left.append(el("span","font-semibold",tag));
         left.append(el("span","text-[0.7rem] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700",isMat?"Mätvärde":"Anteckning"));
         head.append(left);
-
         const input=el("input","w-full bg-slate-800/40 rounded-lg px-2 py-1 text-right text-sm outline-none placeholder-slate-500");
         input.type="text"; input.placeholder=placeholder; input.value=state.measures[tag]?.val||"";
         const time=el("div","text-[0.7rem] text-slate-400 text-right mt-1",state.measures[tag]?.time||"");
-
-        input.addEventListener("input",()=>{ const t=nowStamp(); state.measures[tag]={val:input.value,time:input.value?t:""}; time.textContent=state.measures[tag].time; save(); });
-
-        box.append(head,input, time);
+        input.addEventListener("input",()=>{const t=nowStamp(); state.measures[tag]={val:input.value,time:input.value?t:""}; time.textContent=state.measures[tag].time; save();});
+        box.append(head,input,time);
         return box;
       }
 
-      // ---- fordonsrader ----
+      // Fordonsrader
       const startNr=67, count=21;
       const root=document.getElementById("vehicles");
 
       for(let i=0;i<count;i++){
         const defaultLabel=`ELD ${startNr+i}`;
-        const rowState=state.rows[i]||{label:defaultLabel,note:"",ban:false,time:""};
-
+        const rowState=state.rows[i]??{label:defaultLabel,note:"",ban:false,time:""};
         const wrap=el("div","flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-md transition");
         if(rowState.ban) setBan(true);
 
         const label=el("input","w-32 md:w-40 text-center font-semibold bg-slate-800/60 rounded-xl py-2 outline-none");
         label.type="text"; label.placeholder=defaultLabel; label.value=rowState.label||defaultLabel;
-        label.addEventListener("input",()=>{ ensureRow(i); state.rows[i].label=label.value; save(); });
+        label.addEventListener("input",()=>{ensureRow(i,defaultLabel); state.rows[i].label=label.value; save();});
 
         const note=el("textarea","flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]");
         note.placeholder="Anteckning / status…"; note.value=rowState.note||""; autoGrow(note);
-        note.addEventListener("input",()=>{ autoGrow(note); ensureRow(i); state.rows[i].note=note.value; const t=nowStamp(); state.rows[i].time=note.value?t:""; timeEl.textContent=state.rows[i].time; save(); });
+        note.addEventListener("input",()=>{autoGrow(note); ensureRow(i,defaultLabel); state.rows[i].note=note.value; const t=nowStamp(); state.rows[i].time=note.value?t:""; timeEl.textContent=state.rows[i].time; save();});
 
-        const timeEl=el("div","text-xs text-slate-400 w-28 text-right mr-3", rowState.time||"");
+        const timeEl=el("div","text-xs text-slate-400 w-28 text-right mr-3",rowState.time||"");
 
         const banBtn=el("button","px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 hover:bg-red-500 shadow transition","Körförbud");
-        banBtn.addEventListener("click",()=>{ ensureRow(i); state.rows[i].ban=!state.rows[i].ban; setBan(state.rows[i].ban); save(); });
+        banBtn.addEventListener("click",()=>{ensureRow(i,defaultLabel); state.rows[i].ban=!state.rows[i].ban; setBan(state.rows[i].ban); save();});
 
         function setBan(on){
-          if(on){ wrap.classList.add("bg-red-900/70","border-red-700"); wrap.classList.remove("bg-slate-900/80","border-slate-800"); note.classList.add("bg-red-800/40","text-red-100","placeholder-red-200"); }
-          else  { wrap.classList.remove("bg-red-900/70","border-red-700"); wrap.classList.add("bg-slate-900/80","border-slate-800"); note.classList.remove("bg-red-800/40","text-red-100","placeholder-red-200"); }
+          if(on){
+            wrap.classList.add("bg-red-900/70","border-red-700");
+            wrap.classList.remove("bg-slate-900/80","border-slate-800");
+            note.classList.add("bg-red-800/40","text-red-100","placeholder-red-200");
+          } else {
+            wrap.classList.remove("bg-red-900/70","border-red-700");
+            wrap.classList.add("bg-slate-900/80","border-slate-800");
+            note.classList.remove("bg-red-800/40","text-red-100","placeholder-red-200");
+          }
         }
-        function ensureRow(idx){ if(!state.rows[idx]) state.rows[idx]={label:defaultLabel,note:"",ban:false,time:""}; }
+        function ensureRow(idx,def){ if(!state.rows[idx]) state.rows[idx]={label:def,note:"",ban:false,time:""}; }
 
-        wrap.append(label, note, timeEl, banBtn);
+        wrap.append(label,note,timeEl,banBtn);
         root.appendChild(wrap);
       }
     </script>
   </body>
 </html>
-<footer style="position:fixed;right:8px;bottom:8px;opacity:.6;font:12px sans-serif">
-  VERSION: 2025-10-15_12-25
-</footer>
-<script>console.log("VERSION 2025-10-15_12-25");</script>
