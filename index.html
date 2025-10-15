@@ -3,240 +3,134 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Digital Whiteboard – Körförbud</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://unpkg.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;">
+    <title>Digital Whiteboard – Fordon & Mätning</title>
+
+    <!-- CSP + CDN (ingen build behövs) -->
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
-  <body class="bg-slate-900 text-slate-100">
-    <div id="root"></div>
+  <body class="bg-slate-900 text-slate-100 min-h-screen">
+    <div class="max-w-5xl mx-auto p-4">
+      <h1 class="text-2xl font-bold mb-4">Digital Whiteboard</h1>
 
-    <script type="text/babel">
-      const {useState,useEffect,useMemo} = React;
-      const lsGet = (k,fb)=>{ try{const v=localStorage.getItem(k); return v?JSON.parse(v):fb }catch{return fb} };
-      const lsSet = (k,v)=>{ try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
-      const uid = ()=> Math.random().toString(36).slice(2);
+      <!-- Fordonsrader -->
+      <section id="vehicles" class="space-y-2 mb-6">
+        <!-- Raderna genereras av JS -->
+      </section>
 
-      // Förifyllda bilrader 67–77 (byt till dina bil-ID om du vill)
-      const DEFAULT_ROWS = Array.from({length: 11}, (_,i)=>({
-        id: uid(),
-        label: String(67+i), // bilnr / regnr
-        note: "",            // Notering (kort feltext)
-        color: "",           // valbar färgmarkering
-        ban: false           // körförbud
-      }));
+      <!-- Mät-rader F1–F3 -->
+      <section id="measure" class="mt-8 space-y-2">
+        <h2 class="text-xl font-semibold mb-2">Mätning</h2>
+        <div id="measureRows" class="space-y-2"><!-- fylld av JS --></div>
+      </section>
+    </div>
 
-  
-      ];
+    <script>
+      // ---------- Hjälp ----------
+      const LS_KEY = "dw_simple_v1";
+      const data = loadLS() || { vehicles: {}, measures: {} };
 
-      const COLORS = [
-        {name:"Ingen", val:""},
-        {name:"Grön", val:"#16a34a"},
-        {name:"Gul", val:"#eab308"},
-        {name:"Blå", val:"#3b82f6"},
-        {name:"Orange", val:"#f97316"},
-        {name:"Lila", val:"#8b5cf6"}
-      ];
-
-      function App(){
-        const [rows,setRows] = useState(()=>lsGet("dw_rows2", DEFAULT_ROWS));
-        const [q,setQ] = useState("");
-        const [compact,setCompact] = useState(()=>lsGet("dw_compact2", false));
-        useEffect(()=>lsSet("dw_rows2", rows),[rows]);
-        useEffect(()=>lsSet("dw_compact2", compact),[compact]);
-
-        const filtered = useMemo(()=>{
-          if(!q.trim()) return rows;
-          const s = q.toLowerCase();
-          return rows.filter(r =>
-            r.label.toLowerCase().includes(s) ||
-            r.main.toLowerCase().includes(s) ||
-            r.boxA.toLowerCase().includes(s) ||
-            r.boxB.toLowerCase().includes(s) ||
-            r.note.toLowerCase().includes(s)
-          );
-        },[rows,q]);
-
-        const addRow = (afterId=null)=>{
-          const idx = afterId ? rows.findIndex(r=>r.id===afterId) : rows.length-1;
-          const newLabel = rows.length ? String(Number(rows[rows.length-1].label)+1) : "1";
-          const nr = { id:uid(), label:newLabel, main:"", boxA:"", boxB:"", note:"", color:"", ban:false };
-          const next = [...rows]; next.splice(idx+1,0,nr); setRows(next);
-        };
-        const delRow = (id)=> setRows(rows.filter(r=>r.id!==id));
-        const moveUp = (id)=> { const i=rows.findIndex(r=>r.id===id); if(i<=0) return; const n=[...rows]; [n[i-1],n[i]]=[n[i],n[i-1]]; setRows(n); };
-        const moveDown = (id)=> { const i=rows.findIndex(r=>r.id===id); if(i<0||i===rows.length-1) return; const n=[...rows]; [n[i+1],n[i]]=[n[i],n[i+1]]; setRows(n); };
-        const update = (id, patch)=> setRows(rows.map(r=> r.id===id ? {...r, ...patch} : r));
-
-        const exportJSON = ()=>{
-          const blob = new Blob([JSON.stringify({version:2, rows}, null, 2)], {type:"application/json"});
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a"); a.href=url; a.download=`whiteboard_${new Date().toISOString().slice(0,10)}.json`; a.click();
-          setTimeout(()=>URL.revokeObjectURL(url), 4000);
-        };
-        const importJSON = (ev)=>{
-          const file = ev.target.files[0]; if(!file) return;
-          const reader = new FileReader();
-          reader.onload = ()=>{
-            try { const data = JSON.parse(reader.result); if(Array.isArray(data.rows)) setRows(data.rows); }
-            catch { alert("Felaktig fil."); }
-          };
-          reader.readAsText(file); ev.target.value="";
-        };
-
-        return (
-          <div className={`min-h-screen ${compact? "p-2":"p-4"} print:p-0`}>
-            {/* Toolbar */}
-            <div className="sticky top-0 z-10 backdrop-blur bg-slate-900/80 border-b border-slate-800 px-3 py-2 rounded-b-xl print:hidden">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-bold mr-2">Digital Whiteboard</h1>
-                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Sök bil / text"
-                       className="bg-slate-800 px-3 py-2 rounded-lg outline-none w-56" />
-                <button onClick={()=>addRow()} className="px-3 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-500">+ Rad</button>
-                <button onClick={exportJSON} className="px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700">Export</button>
-                <label className="px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer">
-                  Import <input type="file" accept=".json,application/json" className="hidden" onChange={importJSON} />
-                </label>
-                <label className="ml-auto text-sm flex items-center gap-2">
-                  <input type="checkbox" checked={compact} onChange={e=>setCompact(e.target.checked)} />
-                  Kompakt läge
-                </label>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {PRESETS.map(p=>(
-                  <button key={p} onClick={()=>navigator.clipboard.writeText(p)}
-                          className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs">{p}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rubriker (samma layout) */}
-            <Header compact={compact} />
-
-            {/* Rader */}
-            <div className="mt-1 space-y-2 px-2 print:px-0">
-              {filtered.map((r,i)=>(
-                <Row key={r.id} row={r} idx={i} total={rows.length}
-                     compact={compact}
-                     onAdd={()=>addRow(r.id)}
-                     onDelete={()=>delRow(r.id)}
-                     onMoveUp={()=>moveUp(r.id)}
-                     onMoveDown={()=>moveDown(r.id)}
-                     onChange={patch=>update(r.id,patch)} />
-              ))}
-              {filtered.length===0 && <div className="text-slate-400 text-sm p-6">Inget matchar din sökning.</div>}
-            </div>
-
-            <footer className="text-xs text-slate-500 mt-6 px-3 pb-6 print:hidden">
-              Tips: klicka på ett preset och **klistra in (Ctrl/⌘+V)** i valfri cell. Skriv kort feltext i kolumnen *Notering*.  
-              **Körförbud**: tryck på den röda knappen på raden – tryck igen för att häva.
-            </footer>
-          </div>
-        );
+      function saveLS(){
+        try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+      }
+      function loadLS(){
+        try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null }
+      }
+      function pad(n){ return String(n).padStart(2,"0"); }
+      function nowTime(){
+        const d = new Date();
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
       }
 
-      function Header({compact}){
-        const gridCls = compact? "grid-cols-[64px,1fr,120px,120px,1.2fr]":"grid-cols-[72px,1fr,140px,140px,1.6fr]";
-        return (
-          <div className={`grid ${gridCls} gap-2 mt-3 px-2 print:px-0`}>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Nr</div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Huvud (Bil/Reg/Förare)</div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Ruta A</div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Ruta B</div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Notering (fel)</div>
-          </div>
-        );
+      // ---------- Fordon 67–91 (25 rader) ----------
+      const vehiclesEl = document.getElementById("vehicles");
+      const startNr = 67, rows = 25;
+
+      for(let i=0;i<rows;i++){
+        const nr = startNr + i;
+        const row = document.createElement("div");
+        row.className = "grid grid-cols-[72px,1fr,120px] gap-2 items-center rounded-xl p-2 bg-slate-800/60 ring-1 ring-slate-700";
+
+        // Nummer
+        const label = document.createElement("div");
+        label.className = "text-center font-semibold bg-white/10 rounded-lg py-2 select-none";
+        label.textContent = nr;
+
+        // Inputruta
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.placeholder = "Skriv här…";
+        inp.className = "w-full bg-white/5 rounded-lg px-3 py-2 leading-6 outline-none";
+        inp.value = data.vehicles[nr]?.text || "";
+        inp.addEventListener("input", () => {
+          data.vehicles[nr] = data.vehicles[nr] || {};
+          data.vehicles[nr].text = inp.value;
+          saveLS();
+        });
+
+        // Körförbud-knapp
+        const btn = document.createElement("button");
+        btn.textContent = "Körförbud";
+        btn.className = "px-3 py-2 rounded-lg font-semibold bg-red-600 hover:bg-red-500";
+        const banned = !!data.vehicles[nr]?.ban;
+        if (banned) markBanned(true);
+        btn.addEventListener("click", ()=>{
+          const curr = !!data.vehicles[nr]?.ban;
+          markBanned(!curr);
+          data.vehicles[nr] = data.vehicles[nr] || {};
+          data.vehicles[nr].ban = !curr;
+          saveLS();
+        });
+
+        function markBanned(on){
+          if(on){
+            row.classList.add("ring-red-600","bg-red-900/70");
+            row.classList.remove("ring-slate-700","bg-slate-800/60");
+            inp.classList.add("placeholder-red-200","text-red-50","bg-red-800/60");
+          }else{
+            row.classList.remove("ring-red-600","bg-red-900/70");
+            row.classList.add("ring-slate-700","bg-slate-800/60");
+            inp.classList.remove("placeholder-red-200","text-red-50","bg-red-800/60");
+            inp.classList.add("bg-white/5");
+          }
+        }
+
+        row.append(label, inp, btn);
+        vehiclesEl.appendChild(row);
       }
 
-      function Row({row, idx, total, compact, onAdd, onDelete, onMoveUp, onMoveDown, onChange}){
-        const gridCls = compact? "grid-cols-[64px,1fr,120px,120px,1.2fr]":"grid-cols-[72px,1fr,140px,140px,1.6fr]";
-        const rowWrapCls = row.ban
-          ? "bg-red-900/70 ring-2 ring-red-600 rounded-xl p-2"
-          : "p-0";
-        const labelBoxCls = "w-14 text-center bg-white/5 rounded-lg py-2";
+      // ---------- Mätning F1–F3 ----------
+      const measureRowsEl = document.getElementById("measureRows");
+      ["F1","F2","F3"].forEach(tag=>{
+        const wrap = document.createElement("div");
+        wrap.className = "grid grid-cols-[72px,1fr,140px] gap-2 items-center rounded-xl p-2 bg-slate-800/60 ring-1 ring-slate-700";
 
-        return (
-          <div className={`${rowWrapCls}`}>
-            <div className={`grid ${gridCls} gap-2 items-center`}>
-              {/* label + verktyg */}
-              <div className="flex items-center gap-1">
-                <input value={row.label} onChange={e=>onChange({label:e.target.value})} className={labelBoxCls} />
-                <Menu color={row.color} onColor={(c)=>onChange({color:c})}
-                      ban={row.ban} onToggleBan={()=>onChange({ban:!row.ban})}
-                      onAdd={onAdd} onDelete={onDelete} onUp={onMoveUp} onDown={onMoveDown}
-                      disableUp={idx===0} disableDown={idx===total-1} />
-              </div>
-              <Cell value={row.main} onChange={v=>onChange({main:v})} placeholder="Bil/reg/förare…" color={row.color} ban={row.ban}/>
-              <Cell value={row.boxA} onChange={v=>onChange({boxA:v})} placeholder="ELM25 / G41…" ban={row.ban}/>
-              <Cell value={row.boxB} onChange={v=>onChange({boxB:v})} placeholder="Service / Rensa…" ban={row.ban}/>
-              <Cell value={row.note} onChange={v=>onChange({note:v})} placeholder="Kort feltext…" ban={row.ban}/>
-            </div>
-            {row.ban && (
-              <div className="text-xs font-semibold text-red-200 px-2 pt-1">KÖRFÖRBUD – åtgärda innan körning</div>
-            )}
-          </div>
-        );
-      }
+        const lab = document.createElement("div");
+        lab.className = "text-center font-semibold bg-white/10 rounded-lg py-2 select-none";
+        lab.textContent = tag;
 
-      function Cell({value,onChange,placeholder,color,ban}){
-        return (
-          <div className="relative">
-            {color && !ban && <div className="absolute inset-y-1 left-1 w-1.5 rounded bg-current" style={{color}}></div>}
-            <textarea value={value} onChange={e=>onChange(e.target.value)}
-              placeholder={placeholder}
-              rows="1"
-              onInput={autoGrow}
-              className={`w-full rounded-lg px-3 py-2 pr-2 leading-6 focus:outline-none min-h-[40px]
-                         ${ban ? "bg-red-800/60 ring-1 ring-red-600 placeholder-red-200 text-red-50"
-                               : "bg-white/5"} `} />
-          </div>
-        );
-      }
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.placeholder = "Mätsiffra…";
+        inp.className = "w-full bg-white/5 rounded-lg px-3 py-2 leading-6 outline-none";
+        inp.value = data.measures[tag]?.value || "";
 
-      function autoGrow(e){
-        const ta = e.target;
-        ta.style.height = "auto";
-        ta.style.height = Math.min(120, ta.scrollHeight) + "px";
-      }
+        const timeBox = document.createElement("div");
+        timeBox.className = "text-sm text-slate-300 text-right";
+        timeBox.textContent = data.measures[tag]?.time ? `kl ${data.measures[tag].time}` : "";
 
-      function Menu({color,onColor,ban,onToggleBan,onAdd,onDelete,onUp,onDown,disableUp,disableDown}){
-        return (
-          <div className="flex items-center gap-1">
-            <select value={color} onChange={e=>onColor(e.target.value)}
-              className="bg-white/5 rounded-lg text-xs px-1.5 py-1">
-              {COLORS.map(c=> <option key={c.name} value={c.val}>{c.name}</option>)}
-            </select>
-            <button onClick={onUp}   disabled={disableUp}   className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30" title="Flytta upp">↑</button>
-            <button onClick={onDown} disabled={disableDown} className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30" title="Flytta ner">↓</button>
-            <button onClick={onAdd}  className="px-2 py-1 bg-emerald-600 rounded" title="Ny rad under">+</button>
-            <button onClick={onDelete} className="px-2 py-1 bg-slate-800 rounded" title="Ta bort">✕</button>
-            <button onClick={onToggleBan}
-              className={`px-2 py-1 rounded font-semibold ${ban? "bg-red-700 hover:bg-red-600":"bg-red-600 hover:bg-red-500"}`}
-              title="Körförbud (toggle)">Körförbud</button>
-          </div>
-        );
-      }
+        inp.addEventListener("input", ()=>{
+          const t = nowTime();
+          data.measures[tag] = { value: inp.value, time: t };
+          timeBox.textContent = inp.value ? `kl ${t}` : "";
+          saveLS();
+        });
 
-      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+        wrap.append(lab, inp, timeBox);
+        measureRowsEl.appendChild(wrap);
+      });
     </script>
-
-    <style>
-      @media print{
-        .print\\:p-0{ padding:0 !important; }
-        .print\\:hidden{ display:none !important; }
-        textarea{ border:none !important; }
-        body{ background:white !important; color:black !important; }
-      }
-    </style>
   </body>
 </html>
-
-      
-
-         
-        
-
-    
-   
