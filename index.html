@@ -1,20 +1,20 @@
-      <!doctype html>
+<!doctype html>
 <html lang="sv">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Digital Whiteboard – Fordon & Mätning</title>
-    <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+    <title>Digital Fordonswhiteboard</title>
+
+    <!-- Tailwind direkt utan blockering -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
 
-  <body class="bg-slate-950 text-slate-100 min-h-screen">
+  <body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
     <div class="max-w-5xl mx-auto p-6">
       <!-- Header -->
-      <div class="flex items-start justify-between mb-6">
+      <div class="flex justify-between items-start mb-6">
         <h1 class="text-3xl font-bold tracking-tight">Digital Fordonswhiteboard</h1>
-        <div id="measure" class="flex flex-col gap-2 items-end"></div>
+        <div id="measure" class="flex flex-col gap-3 items-end"></div>
       </div>
 
       <!-- Fordonsrader -->
@@ -22,108 +22,96 @@
     </div>
 
     <script>
-      const LS_KEY = "fordonsboard_v3";
+      const LS_KEY = "fordonsboard_v4";
       const data = loadLS() || { vehicles: {}, measures: {} };
       const startNr = 67, rows = 25;
 
-      // Hjälpfunktioner
-      function loadLS() {
-        try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null }
-      }
-      function saveLS() {
-        try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
-      }
-      function nowStamp() {
+      // --- Hjälp ---
+      function loadLS(){ try{return JSON.parse(localStorage.getItem(LS_KEY));}catch{return null}}
+      function saveLS(){ try{localStorage.setItem(LS_KEY, JSON.stringify(data));}catch{}}
+      function nowStamp(){
         const d = new Date();
-        return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+        return d.toLocaleString("sv-SE", { dateStyle:"short", timeStyle:"short" });
       }
 
-      // Fordonsrader (67–91)
+      // --- Fordonsrader ---
       const vehicles = document.getElementById("vehicles");
-      for (let i = 0; i < rows; i++) {
+      for (let i=0;i<rows;i++){
         const nr = startNr + i;
         const wrap = document.createElement("div");
-        wrap.className =
-          "flex items-center justify-between rounded-2xl bg-slate-900 border border-slate-800 shadow-lg px-4 py-3 transition-all";
+        wrap.className="flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-md hover:shadow-xl transition";
 
         const label = document.createElement("div");
-        label.className =
-          "w-14 text-center font-bold text-lg bg-slate-800/60 rounded-xl py-2 select-none";
-        label.textContent = nr;
+        label.className="w-14 text-center font-bold text-lg bg-slate-800/60 rounded-xl py-2 select-none";
+        label.textContent=nr;
 
-        const input = document.createElement("textarea");
-        input.placeholder = "Anteckning / status för fordonet...";
-        input.rows = 1;
-        input.className =
-          "flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none";
-        input.value = data.vehicles[nr]?.text || "";
-        input.addEventListener("input", () => {
-          input.style.height = "auto";
-          input.style.height = Math.min(120, input.scrollHeight) + "px";
-          data.vehicles[nr] = data.vehicles[nr] || {};
-          data.vehicles[nr].text = input.value;
+        const input=document.createElement("textarea");
+        input.placeholder="Anteckning / status för fordonet...";
+        input.rows=1;
+        input.className="flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none";
+        input.value=data.vehicles[nr]?.text||"";
+        input.addEventListener("input",()=>{
+          input.style.height="auto";
+          input.style.height=Math.min(120,input.scrollHeight)+"px";
+          data.vehicles[nr]={...(data.vehicles[nr]||{}), text:input.value};
           saveLS();
         });
 
-        const btn = document.createElement("button");
-        btn.textContent = "Körförbud";
-        btn.className =
-          "px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 hover:bg-red-500 shadow transition";
-        if (data.vehicles[nr]?.ban) setBan(true);
-        btn.addEventListener("click", () => {
-          const newState = !data.vehicles[nr]?.ban;
-          data.vehicles[nr] = data.vehicles[nr] || {};
-          data.vehicles[nr].ban = newState;
-          setBan(newState);
+        const btn=document.createElement("button");
+        btn.textContent="Körförbud";
+        btn.className="px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 hover:bg-red-500 transition shadow";
+        if(data.vehicles[nr]?.ban) setBan(true);
+        btn.addEventListener("click",()=>{
+          const on=!data.vehicles[nr]?.ban;
+          data.vehicles[nr]={...(data.vehicles[nr]||{}), ban:on};
+          setBan(on);
           saveLS();
         });
 
-        function setBan(on) {
-          if (on) {
-            wrap.classList.add("bg-red-900/80", "border-red-700");
-            wrap.classList.remove("bg-slate-900", "border-slate-800");
-            input.classList.add("bg-red-800/40", "text-red-100", "placeholder-red-200");
-          } else {
-            wrap.classList.remove("bg-red-900/80", "border-red-700");
-            wrap.classList.add("bg-slate-900", "border-slate-800");
-            input.classList.remove("bg-red-800/40", "text-red-100", "placeholder-red-200");
+        function setBan(on){
+          if(on){
+            wrap.classList.add("bg-red-900/70","border-red-700");
+            wrap.classList.remove("bg-slate-900/80");
+            input.classList.add("bg-red-800/40","text-red-100","placeholder-red-200");
+          }else{
+            wrap.classList.remove("bg-red-900/70","border-red-700");
+            wrap.classList.add("bg-slate-900/80");
+            input.classList.remove("bg-red-800/40","text-red-100","placeholder-red-200");
           }
         }
 
-        wrap.append(label, input, btn);
+        wrap.append(label,input,btn);
         vehicles.appendChild(wrap);
       }
 
-      // Mätning F1–F3 uppe till höger
-      const measure = document.getElementById("measure");
-      ["F1", "F2", "F3"].forEach((tag) => {
-        const box = document.createElement("div");
-        box.className =
-          "flex flex-col bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 shadow-md w-52";
+      // --- Mätning F1–F3 ---
+      const measure=document.getElementById("measure");
+      ["F1","F2","F3"].forEach(tag=>{
+        const box=document.createElement("div");
+        box.className="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 shadow-md w-52";
 
-        const header = document.createElement("div");
-        header.className = "flex items-center justify-between mb-1";
-        header.innerHTML = `<span class='font-semibold'>${tag}</span>`;
+        const label=document.createElement("div");
+        label.className="font-semibold text-slate-200 mb-1";
+        label.textContent=tag;
 
-        const input = document.createElement("input");
-        input.type = "text";
-        input.placeholder = "Mätvärde…";
-        input.className =
-          "bg-slate-800/40 rounded-lg px-2 py-1 text-right text-sm outline-none placeholder-slate-500";
-        input.value = data.measures[tag]?.val || "";
+        const input=document.createElement("input");
+        input.type="text";
+        input.placeholder="Mätvärde...";
+        input.className="w-full bg-slate-800/40 rounded-lg px-2 py-1 text-right text-sm outline-none placeholder-slate-500";
+        input.value=data.measures[tag]?.val||"";
 
-        const time = document.createElement("div");
-        time.className = "text-[0.7rem] text-slate-400 text-right mt-1";
-        time.textContent = data.measures[tag]?.time || "";
+        const time=document.createElement("div");
+        time.className="text-[0.7rem] text-slate-400 text-right mt-1";
+        time.textContent=data.measures[tag]?.time||"";
 
-        input.addEventListener("input", () => {
-          const t = nowStamp();
-          data.measures[tag] = { val: input.value, time: t };
-          time.textContent = input.value ? t : "";
+        input.addEventListener("input",()=>{
+          const t=nowStamp();
+          data.measures[tag]={val:input.value,time:t};
+          time.textContent=input.value?t:"";
           saveLS();
         });
 
-        box.append(header, input, time);
+        box.append(label,input,time);
         measure.appendChild(box);
       });
     </script>
