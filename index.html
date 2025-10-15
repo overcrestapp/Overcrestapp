@@ -4,59 +4,133 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Digital Fordonswhiteboard</title>
-    <!-- Tailwind via CDN (ingen build behövs) -->
+    <!-- Tailwind (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="bg-slate-950 text-slate-100 min-h-screen">
     <div class="max-w-5xl mx-auto p-6">
-      <!-- Topp: titel + mätning -->
-      <div class="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 class="text-3xl font-bold tracking-tight">Digital Fordonswhiteboard</h1>
-          <form id="addForm" class="mt-3 flex gap-2">
-            <input id="vehicleName" type="text" placeholder="ELD 67"
-                   class="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 outline-none"
-                   aria-label="Fordon">
-            <button class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold">
-              Lägg till fordon
-            </button>
-            <button id="clearAll" type="button"
-              class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700"
-              title="Ta bort alla rader">Töm tavlan</button>
-          </form>
-          <div id="count" class="mt-2 text-sm text-slate-400"></div>
-        </div>
-        <!-- Mätning uppe till höger -->
+      <!-- Header + mätning -->
+      <div class="flex items-start justify-between mb-6">
+        <h1 class="text-3xl font-bold tracking-tight">Digital Fordonswhiteboard</h1>
         <div id="measure" class="flex flex-col gap-2 items-end"></div>
       </div>
 
-      <!-- Lista med fordon -->
-      <div id="list" class="space-y-3"></div>
+      <!-- 25 rader -->
+      <div id="vehicles" class="space-y-3"></div>
     </div>
 
     <script>
-      // ---- LocalStorage & helpers ----
-      const LS_KEY = "fordonswhiteboard_v5";
-      const state = loadLS() || { vehicles: [], measures: {} };
+      const LS_KEY = "fordonsboard_v6";
+      // state: { rows: { idx: {label, note, ban} }, measures: {F1:{val,time}, ...} }
+      const state = load() || { rows:{}, measures:{} };
 
-      function loadLS(){ try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; } }
-      function saveLS(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {} }
-      const uid = () => Math.random().toString(36).slice(2);
+      const startNr = 67, count = 25;
+
+      // Helpers
+      function load(){ try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; } }
+      function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {} }
       const stamp = () => new Date().toLocaleString("sv-SE", { dateStyle:"short", timeStyle:"short" });
 
-      // ---- UI refs ----
-      const listEl = document.getElementById("list");
-      const addForm = document.getElementById("addForm");
-      const vehicleNameEl = document.getElementById("vehicleName");
-      const clearAllBtn = document.getElementById("clearAll");
-      const countEl = document.getElementById("count");
+      // Build rows
+      const root = document.getElementById("vehicles");
+      for (let i = 0; i < count; i++) {
+        const defaultLabel = String(startNr + i); // kan ändras till "ELD 67" av dig
+        const rowState = state.rows[i] || { label: defaultLabel, note: "", ban: false };
 
-      // ---- Render vehicles ----
-      function render(){
-        listEl.innerHTML = "";
-        state.vehicles.forEach(v => listEl.appendChild(vehicleRow(v)));
-        countEl.textContent = `${state.vehicles.length} fordon`;
+        const wrap = document.createElement("div");
+        wrap.className = "flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-md transition";
+        if (rowState.ban) setBan(true);
+
+        // Redigerbart bilnummer (smal ruta, centrering)
+        const label = document.createElement("input");
+        label.type = "text";
+        label.placeholder = "ELD " + defaultLabel;
+        label.value = rowState.label || defaultLabel;
+        label.className = "w-28 text-center font-semibold bg-slate-800/60 rounded-xl py-2 outline-none";
+        label.addEventListener("input", () => {
+          ensureRow(i);
+          state.rows[i].label = label.value;
+          save();
+        });
+
+        // Anteckningsruta
+        const note = document.createElement("textarea");
+        note.rows = 1;
+        note.placeholder = "Anteckning / status…";
+        note.value = rowState.note || "";
+        note.className = "flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none";
+        note.addEventListener("input", () => {
+          note.style.height = "auto";
+          note.style.height = Math.min(120, note.scrollHeight) + "px";
+          ensureRow(i);
+          state.rows[i].note = note.value;
+          save();
+        });
+        // autohöjd initialt
+        note.style.height = "auto";
+        note.style.height = Math.min(120, note.scrollHeight) + "px";
+
+        // Körförbud
+        const banBtn = document.createElement("button");
+        banBtn.textContent = "Körförbud";
+        banBtn.className = "px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 hover:bg-red-500 shadow transition";
+        banBtn.addEventListener("click", () => {
+          ensureRow(i);
+          state.rows[i].ban = !state.rows[i].ban;
+          setBan(state.rows[i].ban);
+          save();
+        });
+
+        function setBan(on) {
+          if (on) {
+            wrap.classList.add("bg-red-900/70","border-red-700");
+            wrap.classList.remove("bg-slate-900/80","border-slate-800");
+            note.classList.add("bg-red-800/40","text-red-100","placeholder-red-200");
+          } else {
+            wrap.classList.remove("bg-red-900/70","border-red-700");
+            wrap.classList.add("bg-slate-900/80","border-slate-800");
+            note.classList.remove("bg-red-800/40","text-red-100","placeholder-red-200");
+          }
+        }
+
+        function ensureRow(idx){
+          if (!state.rows[idx]) state.rows[idx] = { label: defaultLabel, note: "", ban: false };
+        }
+
+        wrap.append(label, note, banBtn);
+        root.appendChild(wrap);
       }
 
-      function vehicleRow(v){
-        const wrap = el("div", "flex items-center justify-between bg-slate-900/80 border bord
+      // Mätning F1–F3 (uppe till höger)
+      const measure = document.getElementById("measure");
+      ["F1","F2","F3"].forEach(tag => {
+        const box = document.createElement("div");
+        box.className = "bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 shadow-md w-56";
+
+        const head = document.createElement("div");
+        head.className = "flex items-center justify-between mb-1";
+        head.innerHTML = `<span class="font-semibold">${tag}</span>`;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Mätvärde…";
+        input.value = state.measures[tag]?.val || "";
+        input.className = "w-full bg-slate-800/40 rounded-lg px-2 py-1 text-right text-sm outline-none placeholder-slate-500";
+
+        const time = document.createElement("div");
+        time.className = "text-[0.7rem] text-slate-400 text-right mt-1";
+        time.textContent = state.measures[tag]?.time || "";
+
+        input.addEventListener("input", () => {
+          const t = stamp();
+          state.measures[tag] = { val: input.value, time: t };
+          time.textContent = input.value ? t : "";
+          save();
+        });
+
+        box.append(head, input, time);
+        measure.appendChild(box);
+      });
+    </script>
+  </body>
+</html>
