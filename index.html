@@ -4,15 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Digital Fordonswhiteboard</title>
-    <!-- Tailwind (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      textarea { resize: none; } /* Ta bort resize-handtag helt */
+    </style>
   </head>
   <body class="bg-slate-950 text-slate-100 min-h-screen">
     <div class="max-w-5xl mx-auto p-6">
       <!-- Header + mätning -->
       <div class="flex items-start justify-between mb-6">
         <h1 class="text-3xl font-bold tracking-tight">Digital Fordonswhiteboard</h1>
-        <div id="measure" class="flex flex-col gap-2 items-end"></div>
+        <div id="measure" class="grid grid-cols-2 gap-2 items-start"></div>
       </div>
 
       <!-- 25 rader -->
@@ -20,55 +22,77 @@
     </div>
 
     <script>
-      const LS_KEY = "fordonsboard_v6";
-      // state: { rows: { idx: {label, note, ban} }, measures: {F1:{val,time}, ...} }
+      // ========= Nätklocka (Europe/Stockholm) =========
+      const netClock = { ok:false, offsetMs:0 };
+      (async () => {
+        try {
+          const r = await fetch('https://worldtimeapi.org/api/timezone/Europe/Stockholm', { cache: 'no-store' });
+          const j = await r.json();
+          const serverMs = Date.parse(j.datetime);
+          netClock.offsetMs = serverMs - Date.now();
+          netClock.ok = true;
+        } catch (e) {
+          // Fallback till lokal tid
+          netClock.ok = false;
+        }
+      })();
+      function nowStamp(){
+        const ms = Date.now() + (netClock.ok ? netClock.offsetMs : 0);
+        return new Date(ms).toLocaleString('sv-SE', { dateStyle:'short', timeStyle:'short' });
+      }
+
+      // ========= State =========
+      const LS_KEY = "fordonsboard_v7";
       const state = load() || { rows:{}, measures:{} };
-
-      const startNr = 67, count = 25;
-
-      // Helpers
       function load(){ try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; } }
       function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {} }
-      const stamp = () => new Date().toLocaleString("sv-SE", { dateStyle:"short", timeStyle:"short" });
 
-      // Build rows
+      // ========= Fordonsrader =========
+      const startNr = 67, count = 25;
       const root = document.getElementById("vehicles");
+
       for (let i = 0; i < count; i++) {
-        const defaultLabel = String(startNr + i); // kan ändras till "ELD 67" av dig
-        const rowState = state.rows[i] || { label: defaultLabel, note: "", ban: false };
+        const defaultLabel = `ELD ${startNr + i}`;
+        const rowState = state.rows[i] || { label: defaultLabel, note: "", ban: false, time: "" };
 
         const wrap = document.createElement("div");
         wrap.className = "flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-md transition";
         if (rowState.ban) setBan(true);
 
-        // Redigerbart bilnummer (smal ruta, centrering)
+        // Bilnummer (redigerbart)
         const label = document.createElement("input");
         label.type = "text";
-        label.placeholder = "ELD " + defaultLabel;
+        label.placeholder = defaultLabel;
         label.value = rowState.label || defaultLabel;
-        label.className = "w-28 text-center font-semibold bg-slate-800/60 rounded-xl py-2 outline-none";
+        label.className = "w-32 md:w-40 text-center font-semibold bg-slate-800/60 rounded-xl py-2 outline-none";
         label.addEventListener("input", () => {
           ensureRow(i);
           state.rows[i].label = label.value;
           save();
         });
 
-        // Anteckningsruta
+        // Anteckning
         const note = document.createElement("textarea");
         note.rows = 1;
         note.placeholder = "Anteckning / status…";
         note.value = rowState.note || "";
-        note.className = "flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none";
+        note.className = "flex-1 mx-4 bg-slate-800/40 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+        autoGrow(note);
         note.addEventListener("input", () => {
-          note.style.height = "auto";
-          note.style.height = Math.min(120, note.scrollHeight) + "px";
+          autoGrow(note);
           ensureRow(i);
           state.rows[i].note = note.value;
+          // stämpla tid vid input
+          const t = nowStamp();
+          state.rows[i].time = note.value ? t : "";
+          timeEl.textContent = state.rows[i].time;
           save();
         });
-        // autohöjd initialt
-        note.style.height = "auto";
-        note.style.height = Math.min(120, note.scrollHeight) + "px";
+
+        // Tid-label (svensk tid)
+        const timeEl = document.createElement("div");
+        timeEl.className = "text-xs text-slate-400 w-28 text-right mr-3";
+        timeEl.textContent = rowState.time || "";
 
         // Körförbud
         const banBtn = document.createElement("button");
@@ -92,18 +116,22 @@
             note.classList.remove("bg-red-800/40","text-red-100","placeholder-red-200");
           }
         }
-
         function ensureRow(idx){
-          if (!state.rows[idx]) state.rows[idx] = { label: defaultLabel, note: "", ban: false };
+          if (!state.rows[idx]) state.rows[idx] = { label: defaultLabel, note: "", ban: false, time: "" };
+        }
+        function autoGrow(ta){
+          ta.style.height = "auto";
+          ta.style.height = Math.min(120, ta.scrollHeight) + "px";
         }
 
-        wrap.append(label, note, banBtn);
+        wrap.append(label, note, timeEl, banBtn);
         root.appendChild(wrap);
       }
 
-      // Mätning F1–F3 (uppe till höger)
+      // ========= Mätning (F1–F3 + M40, G41, M28, M30, M20, C23) =========
       const measure = document.getElementById("measure");
-      ["F1","F2","F3"].forEach(tag => {
+      const measureKeys = ["F1","F2","F3","M40","G41","M28","M30","M20","C23"];
+      measureKeys.forEach(tag => {
         const box = document.createElement("div");
         box.className = "bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 shadow-md w-56";
 
@@ -122,9 +150,9 @@
         time.textContent = state.measures[tag]?.time || "";
 
         input.addEventListener("input", () => {
-          const t = stamp();
-          state.measures[tag] = { val: input.value, time: t };
-          time.textContent = input.value ? t : "";
+          const t = nowStamp();
+          state.measures[tag] = { val: input.value, time: input.value ? t : "" };
+          time.textContent = state.measures[tag].time;
           save();
         });
 
