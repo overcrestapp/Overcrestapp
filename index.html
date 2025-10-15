@@ -1,44 +1,418 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OvercrestApp – Creative Mobile Applications</title>
-  <style>
-    body { font-family: "Segoe UI", Arial, sans-serif; background: #fff; margin: 0; text-align: center; color: #333; }
-    header { background: #0059b3; color: #fff; padding: 30px 15px; }
-    h1 { margin: 0; font-size: 2rem; }
-    h2 { color: #0059b3; }
-    p { line-height: 1.6; font-size: 1rem; }
-    .app-section { display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 50px 0; }
-    .app-card { background: #fafafa; padding: 25px; width: 90%; max-width: 550px; border-radius: 16px;
-                border: 1px solid #e5e5e5; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
-    footer { margin-top: 60px; padding: 20px; font-size: 14px; color: #666; background: #f5f5f5; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>OvercrestApp</h1>
-    <p>Creative and Educational Mobile Applications</p>
-  </header>
+# Create Pulse Whiteboard desktop app files and zip them
+import os, json, zipfile, textwrap, pathlib
 
-  <section class="app-section">
-    <div class="app-card">
-      <h2>🎨 Fish Paint Play</h2>
-      <p>A creative coloring app where kids can paint shiny fishing lures—like wobblers and spoons—and learn about different lure types in a fun way.<p>
-    </div>
+base = "/mnt/data/PulseWhiteboardDesktop"
+os.makedirs(base, exist_ok=True)
 
-    <div class="app-card">
-      <h2>🧩 New Projects Coming Soon</h2>
-      <p>We’re constantly working on new fun, creative and educational apps for all ages.</p>
-    </div>
-  
+package_json = {
+  "name": "pulse-whiteboard",
+  "version": "1.0.0",
+  "description": "Pulse Whiteboard desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package:mac": "electron-packager . \"Pulse Whiteboard\" --platform=darwin --arch=arm64 --overwrite",
+    "package:win": "electron-packager . \"Pulse Whiteboard\" --platform=win32 --arch=x64 --overwrite"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}
 
-</footer>
-</body>
+main_js = r'''
+const { app, BrowserWindow } = require('electron');
+
+function createWindow () {
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    backgroundColor: '#0f172a', // slate-950
+    webPreferences: { nodeIntegration: false, contextIsolation: true }
+  });
+
+  win.setMenuBarVisibility(false);
+  win.loadFile('index.html');
+}
+
+app.whenReady().then(() => {
+  createWindow();
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+});
+
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+'''
+
+index_html = r'''<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pulse Whiteboard</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: https://unpkg.com https://cdn.tailwindcss.com;">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React 18 via CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-slate-950">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // === Pulse Whiteboard (plain JS) ===
+
+      const { useEffect, useMemo, useRef, useState } = React;
+
+      function PulseWhiteboard() {
+        const [bpm, setBpm] = useState(loadLS("bpm", 70));
+        const [isRunning, setIsRunning] = useState(false);
+        const [elapsed, setElapsed] = useState(0); // seconds
+        const [notes, setNotes] = useState(loadLS("notes", ""));
+        const [recent, setRecent] = useState(loadLS("recent", [])); // last N BPM
+        const [sessions, setSessions] = useState(loadLS("sessions", []));
+        const [zone, setZone] = useState(loadLS("zone", defaultZone()));
+        const [beep, setBeep] = useState(loadLS("beep", true));
+        const [tagInput, setTagInput] = useState("");
+        const beatRef = useRef(null);
+        const warnRef = useRef(null);
+        const tickRef = useRef(null);
+
+        useEffect(() => saveLS("bpm", bpm), [bpm]);
+        useEffect(() => saveLS("notes", notes), [notes]);
+        useEffect(() => saveLS("recent", recent), [recent]);
+        useEffect(() => saveLS("sessions", sessions), [sessions]);
+        useEffect(() => saveLS("zone", zone), [zone]);
+        useEffect(() => saveLS("beep", beep), [beep]);
+
+        useEffect(() => {
+          if (!isRunning) return;
+          const id = setInterval(() => {
+            setElapsed((s) => s + 1);
+            setRecent((arr) => {
+              const next = [...arr, bpm].slice(-180);
+              return next;
+            });
+            if (beep && tickRef.current) { tickRef.current.play().catch(()=>{}); }
+            if (beep && (bpm < zone.targetMin || bpm > zone.targetMax) && warnRef.current) {
+              warnRef.current.play().catch(()=>{});
+            }
+          }, 1000);
+          return () => clearInterval(id);
+        }, [isRunning, bpm, zone.targetMin, zone.targetMax, beep]);
+
+        useEffect(() => {
+          const onKey = (e) => {
+            if (e.key === " ") {
+              e.preventDefault();
+              toggleRun();
+            } else if (e.key.toLowerCase() === "f") {
+              toggleFullscreen();
+            } else if (e.key.toLowerCase() === "s") {
+              saveLap();
+            } else if (e.key === "ArrowUp") {
+              setBpm((b) => b + (e.shiftKey ? 5 : 1));
+            } else if (e.key === "ArrowDown") {
+              setBpm((b) => Math.max(0, b - (e.shiftKey ? 5 : 1)));
+            }
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, []);
+
+        const zoneColor = useMemo(() => pickZoneColor(bpm, zone), [bpm, zone]);
+
+        function toggleRun() { setIsRunning((r) => !r); }
+        function resetTimer() { setIsRunning(false); setElapsed(0); setRecent([]); }
+
+        function saveLap() {
+          const payload = {
+            id: cryptoRandom(),
+            date: new Date().toISOString(),
+            durationSec: elapsed,
+            avgBpm: recent.length ? Math.round(avg(recent)) : bpm,
+            maxBpm: recent.length ? Math.max(...recent) : bpm,
+            minBpm: recent.length ? Math.min(...recent) : bpm,
+            notes,
+            tags: parseTags(tagInput),
+          };
+          setSessions((s) => [payload, ...s].slice(0, 200));
+          setTagInput("");
+        }
+
+        function clearSessions() {
+          if (!confirm("Ta bort alla pass?")) return;
+          setSessions([]);
+        }
+
+        function exportCSV() {
+          const header = ["date","duration_sec","avg_bpm","min_bpm","max_bpm","tags","notes"];
+          const rows = sessions.map((s) => [
+            s.date,
+            String(s.durationSec),
+            String(s.avgBpm),
+            String(s.minBpm),
+            String(s.maxBpm),
+            (s.tags || []).join("|"),
+            (s.notes || "").replaceAll("\\n", " ")
+          ]);
+          const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\\n");
+          downloadText(`pulse_sessions_${new Date().toISOString().slice(0,10)}.csv`, csv);
+        }
+
+        function addQuick(n) { setBpm((b) => Math.max(0, b + n)); }
+
+        function toggleFullscreen() {
+          const el = document.documentElement;
+          if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
+          else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        return (
+          <div className="min-h-screen w-full bg-slate-950 text-slate-100 p-4 sm:p-6 md:p-8 select-none">
+            <audio ref={tickRef} preload="auto" src={BEEP_TICK} />
+            <audio ref={warnRef} preload="auto" src={BEEP_WARN} />
+            <audio ref={beatRef} preload="auto" src={BEEP_BEAT} />
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <HeartIcon className="w-7 h-7" />
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Pulse Whiteboard</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={toggleFullscreen} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 shadow">
+                  Fullscreen (F)
+                </button>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={beep} onChange={e=>setBeep(e.target.checked)} /> Ljud
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              <div className="lg:col-span-1 bg-slate-900 rounded-2xl p-5 shadow-xl">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-sm text-slate-400">Aktuell puls</div>
+                    <div className="mt-2 flex items-end gap-3">
+                      <div className="font-extrabold tracking-tight" style={{fontSize:"11rem", lineHeight:1, color: zoneColor}}>{bpm}</div>
+                      <div className="pb-6 text-2xl text-slate-400">bpm</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={()=>addQuick(+5)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">+5</button>
+                    <button onClick={()=>addQuick(+1)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">+1</button>
+                    <button onClick={()=>addQuick(-1)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">-1</button>
+                    <button onClick={()=>addQuick(-5)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">-5</button>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button onClick={()=>setIsRunning(r=>!r)} className={`px-4 py-3 rounded-2xl shadow text-lg font-semibold ${isRunning?"bg-rose-600 hover:bg-rose-500":"bg-emerald-600 hover:bg-emerald-500"}`}>
+                    {isRunning ? "Stoppa (Space)" : "Starta (Space)"}
+                  </button>
+                  <button onClick={resetTimer} className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700">Nollställ</button>
+                  <button onClick={saveLap} className="px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500">Spara pass (S)</button>
+                  <div className="text-sm text-slate-400">Tid: <span className="text-slate-100 font-semibold">{fmtTime(elapsed)}</span></div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="text-sm text-slate-400 mb-2">Senaste pulsen</div>
+                  <Sparkline data={recent} color={zoneColor} height={80} />
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 bg-slate-900 rounded-2xl p-5 shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-slate-400">Zoner</div>
+                  <div className="text-xs text-slate-500">Tips: ställ in Målmin/Målmax så får du varning när du går utanför.</div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {["Rest","Fat burn","Cardio","Peak"].map((name, i) => (
+                    <ZoneRow key={name} name={name} index={i} bpm={bpm} zone={zone} setZone={setZone} />
+                  ))}
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <RangeField label="Målmin (bpm)" value={zone.targetMin} onChange={(v)=>setZone({...zone, targetMin: v})} min={0} max={220} />
+                  <RangeField label="Målmax (bpm)" value={zone.targetMax} onChange={(v)=>setZone({...zone, targetMax: v})} min={0} max={220} />
+                </div>
+                <div className="mt-2 text-xs text-slate-400">Aktuell zonfärg styr även stora siffrans färg.</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              <div className="lg:col-span-1 bg-slate-900 rounded-2xl p-5 shadow-xl">
+                <div className="text-sm text-slate-400 mb-2">Anteckningar</div>
+                <textarea value={notes} onChange={(e)=>setNotes(e.target.value)} placeholder="Hur kändes passet? Väder, sömn, mat…" className="w-full h-40 rounded-xl bg-slate-800 p-3 outline-none" />
+                <div className="mt-3">
+                  <div className="text-sm text-slate-400 mb-1">Taggar (kommaseparerade)</div>
+                  <div className="flex gap-2">
+                    <input value={tagInput} onChange={(e)=>setTagInput(e.target.value)} placeholder="Hard, Easy, Intervaller" className="flex-1 rounded-xl bg-slate-800 p-2 outline-none" />
+                    <button onClick={()=>setTagInput(addTag(tagInput, "Hard"))} className="px-3 py-2 rounded-xl bg-slate-800">Hard</button>
+                    <button onClick={()=>setTagInput(addTag(tagInput, "Easy"))} className="px-3 py-2 rounded-xl bg-slate-800">Easy</button>
+                  </div>
+                </div>
+              </div>
+              <div className="lg:col-span-2 bg-slate-900 rounded-2xl p-5 shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-slate-400">Passlogg</div>
+                  <div className="flex gap-2">
+                    <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Exportera CSV</button>
+                    <button onClick={clearSessions} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Töm</button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-slate-400">
+                      <tr className="text-left">
+                        <th className="py-2 pr-4">Datum</th>
+                        <th className="py-2 pr-4">Tid</th>
+                        <th className="py-2 pr-4">Snitt</th>
+                        <th className="py-2 pr-4">Min</th>
+                        <th className="py-2 pr-4">Max</th>
+                        <th className="py-2 pr-4">Taggar</th>
+                        <th className="py-2 pr-4">Anteckningar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.length === 0 && (
+                        <tr><td className="py-6 text-slate-500" colSpan={7}>Inga sparade pass ännu – tryck "Spara pass".</td></tr>
+                      )}
+                      {sessions.map((s) => (
+                        <tr key={s.id} className="border-t border-slate-800">
+                          <td className="py-2 pr-4 whitespace-nowrap">{fmtDate(s.date)}</td>
+                          <td className="py-2 pr-4">{fmtTime(s.durationSec)}</td>
+                          <td className="py-2 pr-4">{s.avgBpm} bpm</td>
+                          <td className="py-2 pr-4">{s.minBpm} bpm</td>
+                          <td className="py-2 pr-4">{s.maxBpm} bpm</td>
+                          <td className="py-2 pr-4">{(s.tags||[]).join(", ")}</td>
+                          <td className="py-2 pr-4 max-w-[24rem] truncate" title={s.notes}>{s.notes}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 mt-6">
+              Kortkommandon: ↑/↓ = BPM ±1, Shift+↑/↓ = ±5, Space = Start/Stop, F = Fullscreen, S = Spara pass.
+            </div>
+          </div>
+        );
+      }
+
+      function ZoneRow({ name, index, bpm, zone, setZone }) {
+        const key = ["rest","fat","cardio","peak"][index];
+        const cfg = zone[key];
+        const inRange = bpm >= cfg.min && bpm <= cfg.max;
+        return (
+          <div className={`rounded-2xl p-4 bg-slate-800/60 border ${inRange?"border-emerald-600/60":"border-transparent"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">{name}</div>
+              <div className="text-xs text-slate-400">{cfg.min}–{cfg.max} bpm</div>
+            </div>
+            <div className="flex gap-3 items-center">
+              <RangeField label="Min" value={cfg.min} onChange={(v)=>setZone({...zone, [key]:{...cfg, min:v}})} min={0} max={220} />
+              <RangeField label="Max" value={cfg.max} onChange={(v)=>setZone({...zone, [key]:{...cfg, max:v}})} min={0} max={220} />
+            </div>
+            <div className="mt-3 h-2 rounded-full overflow-hidden bg-slate-700">
+              <div className="h-full" style={{width: pctSpan(cfg.min, cfg.max) + "%", marginLeft: pct(cfg.min) + "%", background: cfg.color}} />
+            </div>
+          </div>
+        );
+      }
+
+      function RangeField({ label, value, onChange, min, max }) {
+        return (
+          <div className="w-full">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>{label}</span>
+              <span className="text-slate-300 font-semibold">{value}</span>
+            </div>
+            <input type="range" min={min} max={max} step={1} value={value} onChange={(e)=>onChange(parseInt(e.target.value))} className="w-full accent-indigo-500" />
+          </div>
+        );
+      }
+
+      function Sparkline({ data, color, height=60 }) {
+        const points = React.useMemo(() => {
+          if (!data || data.length === 0) return "";
+          const w = 600;
+          const h = height;
+          const min = Math.min(...data, 40);
+          const max = Math.max(...data, 200);
+          const xs = data.map((_, i) => (i / Math.max(1, data.length - 1)) * (w - 4) + 2);
+          const ys = data.map(v => h - mapRange(v, min, max, 2, h - 2));
+          return xs.map((x,i)=>`${x},${ys[i]}`).join(" ");
+        }, [data, height]);
+        return (
+          <div className="w-full overflow-x-auto">
+            <svg width={Math.max(600, (data.length||1) * 4)} height={height} className="block bg-slate-800 rounded-xl">
+              <polyline fill="none" stroke={color} strokeWidth="3" points={points} />
+            </svg>
+          </div>
+        );
+      }
+
+      function HeartIcon({ className="w-6 h-6" }) {
+        return (
+          <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 21s-6.716-4.393-9.428-7.105A6 6 0 1 1 12 5a6 6 0 1 1 9.428 8.895C18.716 16.607 12 21 12 21z"/>
+          </svg>
+        );
+      }
+
+      function defaultZone() {
+        return {
+          rest: { min: 40, max: 90, color: "#22c55e" },
+          fat: { min: 91, max: 120, color: "#eab308" },
+          cardio: { min: 121, max: 150, color: "#f97316" },
+          peak: { min: 151, max: 200, color: "#ef4444" },
+          targetMin: 120, targetMax: 150,
+        };
+      }
+
+      function pickZoneColor(bpm, z) {
+        if (bpm <= z.rest.max) return z.rest.color;
+        if (bpm <= z.fat.max) return z.fat.color;
+        if (bpm <= z.cardio.max) return z.cardio.color;
+        return z.peak.color;
+      }
+
+      function avg(arr){ return arr.reduce((a,b)=>a+b,0) / (arr.length||1); }
+      function mapRange(v,inMin,inMax,outMin,outMax){ if (inMax===inMin) return (outMin+outMax)/2; return outMin + (v-inMin)*(outMax-outMin)/(inMax-inMin); }
+      function pct(v){ return Math.min(100, Math.max(0, (v/220)*100)); }
+      function pctSpan(min,max){ return Math.max(0, pct(max) - pct(min)); }
+      function fmtTime(total){ const h = Math.floor(total/3600).toString().padStart(2,"0"); const m = Math.floor((total%3600)/60).toString().padStart(2,"0"); const s = Math.floor(total%60).toString().padStart(2,"0"); return (h==="00"? `${m}:${s}` : `${h}:${m}:${s}`); }
+      function fmtDate(iso){ const d = new Date(iso); return d.toLocaleString(undefined, { year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" }); }
+      function cryptoRandom(){ try { return crypto.randomUUID(); } catch { return String(Math.random()).slice(2); } }
+      function parseTags(s){ return s.split(/[,|]/).map(t=>t.trim()).filter(Boolean); }
+      function addTag(curr, tag){ const list = parseTags(curr); if (!list.includes(tag)) list.push(tag); return list.join(", "); }
+      function csvEscape(s){ if (s == null) return ""; if (/[",\n]/.test(s)) return '"' + s.replaceAll('"','""') + '"'; return s; }
+      function downloadText(filename, text){ const blob = new Blob([text], { type: "text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 5000); }
+      function loadLS(k, fallback){ try { const v = localStorage.getItem("pw_"+k); return v? JSON.parse(v): fallback } catch { return fallback } }
+      function saveLS(k, v){ try { localStorage.setItem("pw_"+k, JSON.stringify(v)); } catch {} }
+
+      const BEEP_TICK = "data:audio/wav;base64,UklGRqkAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAChAAAAAAAAgAAA/////wAAAP///wAAAP///wAAAP///wAAAP///wAAAP///wAAAP8=";
+      const BEEP_WARN = "data:audio/wav;base64,UklGRhAAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAABQAAAAAAAAgP///wAAAP7+/v7+/gAAAP7+/v7+/gAAAP7+/v7+/gAAAP7+/g==";
+      const BEEP_BEAT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAA8AAAAAAAAgP///wAAAP7+/gAAAP7+/gAAAP7+/gAAAP7+";
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(PulseWhiteboard));
+    </script>
+  </body>
 </html>
-<footer>
-  © 2025 OvercrestApp · 
-  Kontakt: <a href="mailto:overcrestapp@gmail.com">overcrestapp@gmail.com</a> ·
-  <a href="privacy.html">Privacy Policy</a>
-</footer>
+'''
+
+readme = r'''
+# Pulse Whiteboard (Desktop)
+
+Enkel desktop‑app (Electron) för att visa och logga puls, zoner, anteckningar och exportera CSV.
+
+## Kom igång
+1. Installera **Node.js LTS** från https://nodejs.org (om du inte redan har).
+2. Öppna terminalen i den här mappen och kör:
+   ```bash
+   npm install
+   npm start
