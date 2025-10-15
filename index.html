@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Digital Whiteboard</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://unpkg.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data:;">
+    <title>Digital Whiteboard – Körförbud</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://unpkg.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;">
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -15,44 +15,43 @@
 
     <script type="text/babel">
       const {useState,useEffect,useMemo} = React;
-
-      // ---- Helpers
       const lsGet = (k,fb)=>{ try{const v=localStorage.getItem(k); return v?JSON.parse(v):fb }catch{return fb} };
       const lsSet = (k,v)=>{ try{localStorage.setItem(k,JSON.stringify(v))}catch{} };
       const uid = ()=> Math.random().toString(36).slice(2);
 
+      // Förifyllda bilrader 67–77 (byt till dina bil-ID om du vill)
       const DEFAULT_ROWS = Array.from({length: 11}, (_,i)=>({
         id: uid(),
-        label: String(67+i),
-        main: "",
-        boxA: "",
-        boxB: "",
-        note: "",
-        color: ""
+        label: String(67+i), // bilnr / regnr
+        main: "",            // Huvud (bilnamn, regnr, förare)
+        boxA: "",            // Ruta A (t.ex. maskin/objekt)
+        boxB: "",            // Ruta B (status)
+        note: "",            // Notering (kort feltext)
+        color: "",           // valbar färgmarkering
+        ban: false           // körförbud
       }));
 
       const PRESETS = [
-        "ELM25","ELM26","ELM29","G41","G41 800","M43","M28","M30","G41 Rensa","Tank R81","OJ","Ventbult 53","C23","M20","ZN","Finna GB",
-        "1140 service","Service","Rensa","Fullt 05:00","Fullt 20:00","35m 05:00","Ok","Ej","Klar"
+        "Service", "1140 service", "Rensa", "Tank R81", "OJ",
+        "Fullt 05:00", "Fullt 20:00", "35m 05:00", "Ok", "Klar",
+        "ELM25","ELM26","ELM29","G41","G41 800","M43","M28","M30","C23","M20","ZN","GB"
       ];
 
       const COLORS = [
         {name:"Ingen", val:""},
         {name:"Grön", val:"#16a34a"},
         {name:"Gul", val:"#eab308"},
-        {name:"Röd", val:"#ef4444"},
         {name:"Blå", val:"#3b82f6"},
         {name:"Orange", val:"#f97316"},
-        {name:"Lila", val:"#8b5cf6"},
+        {name:"Lila", val:"#8b5cf6"}
       ];
 
       function App(){
-        const [rows,setRows] = useState(()=>lsGet("dw_rows", DEFAULT_ROWS));
+        const [rows,setRows] = useState(()=>lsGet("dw_rows2", DEFAULT_ROWS));
         const [q,setQ] = useState("");
-        const [compact,setCompact] = useState(()=>lsGet("dw_compact", false));
-
-        useEffect(()=>lsSet("dw_rows", rows),[rows]);
-        useEffect(()=>lsSet("dw_compact", compact),[compact]);
+        const [compact,setCompact] = useState(()=>lsGet("dw_compact2", false));
+        useEffect(()=>lsSet("dw_rows2", rows),[rows]);
+        useEffect(()=>lsSet("dw_compact2", compact),[compact]);
 
         const filtered = useMemo(()=>{
           if(!q.trim()) return rows;
@@ -66,86 +65,63 @@
           );
         },[rows,q]);
 
-        function addRow(afterId=null){
+        const addRow = (afterId=null)=>{
           const idx = afterId ? rows.findIndex(r=>r.id===afterId) : rows.length-1;
           const newLabel = rows.length ? String(Number(rows[rows.length-1].label)+1) : "1";
-          const nr = { id:uid(), label:newLabel, main:"", boxA:"", boxB:"", note:"", color:"" };
-          const next = [...rows];
-          next.splice(idx+1,0,nr);
-          setRows(next);
-        }
+          const nr = { id:uid(), label:newLabel, main:"", boxA:"", boxB:"", note:"", color:"", ban:false };
+          const next = [...rows]; next.splice(idx+1,0,nr); setRows(next);
+        };
         const delRow = (id)=> setRows(rows.filter(r=>r.id!==id));
-        const moveUp = (id)=> {
-          const i = rows.findIndex(r=>r.id===id); if(i<=0) return;
-          const next = [...rows]; [next[i-1],next[i]] = [next[i],next[i-1]]; setRows(next);
-        };
-        const moveDown = (id)=> {
-          const i = rows.findIndex(r=>r.id===id); if(i<0||i===rows.length-1) return;
-          const next = [...rows]; [next[i+1],next[i]] = [next[i],next[i+1]]; setRows(next);
-        };
+        const moveUp = (id)=> { const i=rows.findIndex(r=>r.id===id); if(i<=0) return; const n=[...rows]; [n[i-1],n[i]]=[n[i],n[i-1]]; setRows(n); };
+        const moveDown = (id)=> { const i=rows.findIndex(r=>r.id===id); if(i<0||i===rows.length-1) return; const n=[...rows]; [n[i+1],n[i]]=[n[i],n[i+1]]; setRows(n); };
         const update = (id, patch)=> setRows(rows.map(r=> r.id===id ? {...r, ...patch} : r));
 
-        function exportJSON(){
-          const blob = new Blob([JSON.stringify({version:1, rows}, null, 2)], {type:"application/json"});
+        const exportJSON = ()=>{
+          const blob = new Blob([JSON.stringify({version:2, rows}, null, 2)], {type:"application/json"});
           const url = URL.createObjectURL(blob);
-          const a = document.createElement("a"); a.href = url; a.download = `whiteboard_${new Date().toISOString().slice(0,10)}.json`; a.click();
-          setTimeout(()=>URL.revokeObjectURL(url), 5000);
-        }
-        function importJSON(ev){
+          const a = document.createElement("a"); a.href=url; a.download=`whiteboard_${new Date().toISOString().slice(0,10)}.json`; a.click();
+          setTimeout(()=>URL.revokeObjectURL(url), 4000);
+        };
+        const importJSON = (ev)=>{
           const file = ev.target.files[0]; if(!file) return;
           const reader = new FileReader();
-          reader.onload = () => {
-            try{
-              const data = JSON.parse(reader.result);
-              if(Array.isArray(data.rows)) setRows(data.rows);
-            }catch{ alert("Felaktig fil."); }
+          reader.onload = ()=>{
+            try { const data = JSON.parse(reader.result); if(Array.isArray(data.rows)) setRows(data.rows); }
+            catch { alert("Felaktig fil."); }
           };
-          reader.readAsText(file);
-          ev.target.value = "";
-        }
-        function clearAll(){
-          if(confirm("Töm hela tavlan?")) setRows(DEFAULT_ROWS);
-        }
-        function printBoard(){ window.print(); }
+          reader.readAsText(file); ev.target.value="";
+        };
 
         return (
           <div className={`min-h-screen ${compact? "p-2":"p-4"} print:p-0`}>
             {/* Toolbar */}
-            <div className="sticky top-0 z-10 backdrop-blur bg-slate-900/80 border-b border-slate-800 px-3 py-2 rounded-b-xl">
+            <div className="sticky top-0 z-10 backdrop-blur bg-slate-900/80 border-b border-slate-800 px-3 py-2 rounded-b-xl print:hidden">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-bold mr-2">Digital Whiteboard</h1>
-                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Sök (nr, text…)" className="bg-slate-800 px-3 py-2 rounded-lg outline-none w-56" />
+                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Sök bil / text"
+                       className="bg-slate-800 px-3 py-2 rounded-lg outline-none w-56" />
                 <button onClick={()=>addRow()} className="px-3 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-500">+ Rad</button>
                 <button onClick={exportJSON} className="px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700">Export</button>
                 <label className="px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer">
-                  Import
-                  <input type="file" accept=".json,application/json" className="hidden" onChange={importJSON} />
+                  Import <input type="file" accept=".json,application/json" className="hidden" onChange={importJSON} />
                 </label>
-                <button onClick={printBoard} className="px-3 py-2 bg-slate-800 rounded-lg hover:bg-slate-700">Skriv ut</button>
-                <button onClick={clearAll} className="px-3 py-2 bg-rose-600 rounded-lg hover:bg-rose-500">Töm tavlan</button>
                 <label className="ml-auto text-sm flex items-center gap-2">
                   <input type="checkbox" checked={compact} onChange={e=>setCompact(e.target.checked)} />
                   Kompakt läge
                 </label>
               </div>
-              {/* presets */}
               <div className="mt-2 flex flex-wrap gap-2">
                 {PRESETS.map(p=>(
-                  <Preset key={p} text={p} />
+                  <button key={p} onClick={()=>navigator.clipboard.writeText(p)}
+                          className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs">{p}</button>
                 ))}
               </div>
             </div>
 
-            {/* Header row */}
-            <div className={`grid ${compact? "grid-cols-[64px,1fr,120px,120px,1.2fr]":"grid-cols-[72px,1fr,140px,140px,1.6fr]"} gap-2 mt-3 px-2 print:px-0`}>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Nr</div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Huvud</div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Ruta A</div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Ruta B</div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Notering</div>
-            </div>
+            {/* Rubriker (samma layout) */}
+            <Header compact={compact} />
 
-            {/* Rows */}
+            {/* Rader */}
             <div className="mt-1 space-y-2 px-2 print:px-0">
               {filtered.map((r,i)=>(
                 <Row key={r.id} row={r} idx={i} total={rows.length}
@@ -156,64 +132,71 @@
                      onMoveDown={()=>moveDown(r.id)}
                      onChange={patch=>update(r.id,patch)} />
               ))}
-              {filtered.length===0 && (
-                <div className="text-slate-400 text-sm p-6">Inget matchar din sökning.</div>
-              )}
+              {filtered.length===0 && <div className="text-slate-400 text-sm p-6">Inget matchar din sökning.</div>}
             </div>
 
             <footer className="text-xs text-slate-500 mt-6 px-3 pb-6 print:hidden">
-              Tips: klicka på ett preset ovan och sedan i en cell för att klistra in. Allt sparas automatiskt.
+              Tips: klicka på ett preset och **klistra in (Ctrl/⌘+V)** i valfri cell. Skriv kort feltext i kolumnen *Notering*.  
+              **Körförbud**: tryck på den röda knappen på raden – tryck igen för att häva.
             </footer>
           </div>
         );
       }
 
-      // ---- Preset pill (copy-to-clipboard like)
-      function Preset({text}){
-        function copy(){
-          navigator.clipboard.writeText(text).then(()=>{
-            // tiny feedback could be added
-          });
-        }
-        return (
-          <button onClick={copy} title="Klicka, sedan Ctrl/⌘+V i en cell"
-            className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs">
-            {text}
-          </button>
-        );
-      }
-
-      // ---- Single row component
-      function Row({row, idx, total, compact, onAdd, onDelete, onMoveUp, onMoveDown, onChange}){
-        const cellCls = "bg-white/5 rounded-lg px-2 py-2 focus:outline-none w-full";
+      function Header({compact}){
         const gridCls = compact? "grid-cols-[64px,1fr,120px,120px,1.2fr]":"grid-cols-[72px,1fr,140px,140px,1.6fr]";
         return (
-          <div className={`grid ${gridCls} gap-2 items-center`}>
-            {/* label + tools */}
-            <div className="flex items-center gap-1">
-              <input value={row.label} onChange={e=>onChange({label:e.target.value})}
-                     className="w-14 text-center bg-white/5 rounded-lg py-2" />
-              <Menu color={row.color} onColor={(c)=>onChange({color:c})}
-                    onAdd={onAdd} onDelete={onDelete} onUp={onMoveUp} onDown={onMoveDown}
-                    disableUp={idx===0} disableDown={idx===total-1} />
-            </div>
-            <Cell value={row.main}  onChange={v=>onChange({main:v})} placeholder="Text…" color={row.color}/>
-            <Cell value={row.boxA}  onChange={v=>onChange({boxA:v})} placeholder="ELM25 / G41…" />
-            <Cell value={row.boxB}  onChange={v=>onChange({boxB:v})} placeholder="Service / Rensa…" />
-            <Cell value={row.note}  onChange={v=>onChange({note:v})} placeholder="Tider, status, extra…" />
+          <div className={`grid ${gridCls} gap-2 mt-3 px-2 print:px-0`}>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Nr</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Huvud (Bil/Reg/Förare)</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Ruta A</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Ruta B</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Notering (fel)</div>
           </div>
         );
       }
 
-      function Cell({value,onChange,placeholder,color}){
+      function Row({row, idx, total, compact, onAdd, onDelete, onMoveUp, onMoveDown, onChange}){
+        const gridCls = compact? "grid-cols-[64px,1fr,120px,120px,1.2fr]":"grid-cols-[72px,1fr,140px,140px,1.6fr]";
+        const rowWrapCls = row.ban
+          ? "bg-red-900/70 ring-2 ring-red-600 rounded-xl p-2"
+          : "p-0";
+        const labelBoxCls = "w-14 text-center bg-white/5 rounded-lg py-2";
+
+        return (
+          <div className={`${rowWrapCls}`}>
+            <div className={`grid ${gridCls} gap-2 items-center`}>
+              {/* label + verktyg */}
+              <div className="flex items-center gap-1">
+                <input value={row.label} onChange={e=>onChange({label:e.target.value})} className={labelBoxCls} />
+                <Menu color={row.color} onColor={(c)=>onChange({color:c})}
+                      ban={row.ban} onToggleBan={()=>onChange({ban:!row.ban})}
+                      onAdd={onAdd} onDelete={onDelete} onUp={onMoveUp} onDown={onMoveDown}
+                      disableUp={idx===0} disableDown={idx===total-1} />
+              </div>
+              <Cell value={row.main} onChange={v=>onChange({main:v})} placeholder="Bil/reg/förare…" color={row.color} ban={row.ban}/>
+              <Cell value={row.boxA} onChange={v=>onChange({boxA:v})} placeholder="ELM25 / G41…" ban={row.ban}/>
+              <Cell value={row.boxB} onChange={v=>onChange({boxB:v})} placeholder="Service / Rensa…" ban={row.ban}/>
+              <Cell value={row.note} onChange={v=>onChange({note:v})} placeholder="Kort feltext…" ban={row.ban}/>
+            </div>
+            {row.ban && (
+              <div className="text-xs font-semibold text-red-200 px-2 pt-1">KÖRFÖRBUD – åtgärda innan körning</div>
+            )}
+          </div>
+        );
+      }
+
+      function Cell({value,onChange,placeholder,color,ban}){
         return (
           <div className="relative">
-            {color && <div className="absolute inset-y-1 left-1 w-1.5 rounded bg-current" style={{color}}></div>}
+            {color && !ban && <div className="absolute inset-y-1 left-1 w-1.5 rounded bg-current" style={{color}}></div>}
             <textarea value={value} onChange={e=>onChange(e.target.value)}
               placeholder={placeholder}
               rows="1"
               onInput={autoGrow}
-              className="w-full bg-white/5 rounded-lg px-3 py-2 pr-2 leading-6 focus:outline-none min-h-[40px]" />
+              className={`w-full rounded-lg px-3 py-2 pr-2 leading-6 focus:outline-none min-h-[40px]
+                         ${ban ? "bg-red-800/60 ring-1 ring-red-600 placeholder-red-200 text-red-50"
+                               : "bg-white/5"} `} />
           </div>
         );
       }
@@ -224,22 +207,24 @@
         ta.style.height = Math.min(120, ta.scrollHeight) + "px";
       }
 
-      function Menu({color,onColor,onAdd,onDelete,onUp,onDown,disableUp,disableDown}){
+      function Menu({color,onColor,ban,onToggleBan,onAdd,onDelete,onUp,onDown,disableUp,disableDown}){
         return (
           <div className="flex items-center gap-1">
             <select value={color} onChange={e=>onColor(e.target.value)}
               className="bg-white/5 rounded-lg text-xs px-1.5 py-1">
               {COLORS.map(c=> <option key={c.name} value={c.val}>{c.name}</option>)}
             </select>
-            <button onClick={onUp}   disabled={disableUp}   className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30">↑</button>
-            <button onClick={onDown} disabled={disableDown} className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30">↓</button>
-            <button onClick={onAdd}  className="px-2 py-1 bg-emerald-600 rounded">+</button>
-            <button onClick={onDelete} className="px-2 py-1 bg-rose-600 rounded">✕</button>
+            <button onClick={onUp}   disabled={disableUp}   className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30" title="Flytta upp">↑</button>
+            <button onClick={onDown} disabled={disableDown} className="px-2 py-1 bg-slate-800 rounded disabled:opacity-30" title="Flytta ner">↓</button>
+            <button onClick={onAdd}  className="px-2 py-1 bg-emerald-600 rounded" title="Ny rad under">+</button>
+            <button onClick={onDelete} className="px-2 py-1 bg-slate-800 rounded" title="Ta bort">✕</button>
+            <button onClick={onToggleBan}
+              className={`px-2 py-1 rounded font-semibold ${ban? "bg-red-700 hover:bg-red-600":"bg-red-600 hover:bg-red-500"}`}
+              title="Körförbud (toggle)">Körförbud</button>
           </div>
         );
       }
 
-      // Mount
       ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
     </script>
 
@@ -254,5 +239,10 @@
   </body>
 </html>
 
- 
+      
+
+         
+        
+
+    
    
