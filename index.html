@@ -1,99 +1,59 @@
-# Create Pulse Whiteboard desktop app files and zip them
-import os, json, zipfile, textwrap, pathlib
-
-base = "/mnt/data/PulseWhiteboardDesktop"
-os.makedirs(base, exist_ok=True)
-
-package_json = {
-  "name": "pulse-whiteboard",
-  "version": "1.0.0",
-  "description": "Pulse Whiteboard desktop app",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "package:mac": "electron-packager . \"Pulse Whiteboard\" --platform=darwin --arch=arm64 --overwrite",
-    "package:win": "electron-packager . \"Pulse Whiteboard\" --platform=win32 --arch=x64 --overwrite"
-  },
-  "devDependencies": {
-    "electron": "^32.0.0",
-    "electron-packager": "^17.1.2"
-  }
-}
-
-main_js = r'''
-const { app, BrowserWindow } = require('electron');
-
-function createWindow () {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    backgroundColor: '#0f172a', // slate-950
-    webPreferences: { nodeIntegration: false, contextIsolation: true }
-  });
-
-  win.setMenuBarVisibility(false);
-  win.loadFile('index.html');
-}
-
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-});
-
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-'''
-
-index_html = r'''<!doctype html>
-<html>
+<!doctype html>
+<html lang="sv">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Pulse Whiteboard</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: https://unpkg.com https://cdn.tailwindcss.com;">
+
+    <!-- Tillåt CDN för enkel single-file -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self' https://unpkg.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data:; media-src 'self' data:;">
+
+    <!-- Tailwind (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React 18 via CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel for JSX in the browser -->
+
+    <!-- React 18 (production UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel för att köra JSX direkt (enkelt för GitHub Pages) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
   <body class="bg-slate-950">
     <div id="root"></div>
 
+    <!-- Pulse Whiteboard – hela appen inline -->
     <script type="text/babel">
-      // === Pulse Whiteboard (plain JS) ===
-
       const { useEffect, useMemo, useRef, useState } = React;
 
       function PulseWhiteboard() {
         const [bpm, setBpm] = useState(loadLS("bpm", 70));
         const [isRunning, setIsRunning] = useState(false);
-        const [elapsed, setElapsed] = useState(0); // seconds
+        const [elapsed, setElapsed] = useState(0);
         const [notes, setNotes] = useState(loadLS("notes", ""));
-        const [recent, setRecent] = useState(loadLS("recent", [])); // last N BPM
+        const [recent, setRecent] = useState(loadLS("recent", []));
         const [sessions, setSessions] = useState(loadLS("sessions", []));
         const [zone, setZone] = useState(loadLS("zone", defaultZone()));
         const [beep, setBeep] = useState(loadLS("beep", true));
         const [tagInput, setTagInput] = useState("");
-        const beatRef = useRef(null);
         const warnRef = useRef(null);
         const tickRef = useRef(null);
 
-        useEffect(() => saveLS("bpm", bpm), [bpm]);
-        useEffect(() => saveLS("notes", notes), [notes]);
-        useEffect(() => saveLS("recent", recent), [recent]);
-        useEffect(() => saveLS("sessions", sessions), [sessions]);
-        useEffect(() => saveLS("zone", zone), [zone]);
-        useEffect(() => saveLS("beep", beep), [beep]);
+        // Persistens
+        useEffect(()=>saveLS("bpm", bpm), [bpm]);
+        useEffect(()=>saveLS("notes", notes), [notes]);
+        useEffect(()=>saveLS("recent", recent), [recent]);
+        useEffect(()=>saveLS("sessions", sessions), [sessions]);
+        useEffect(()=>saveLS("zone", zone), [zone]);
+        useEffect(()=>saveLS("beep", beep), [beep]);
 
+        // Timer & sampling
         useEffect(() => {
           if (!isRunning) return;
           const id = setInterval(() => {
-            setElapsed((s) => s + 1);
-            setRecent((arr) => {
-              const next = [...arr, bpm].slice(-180);
-              return next;
-            });
-            if (beep && tickRef.current) { tickRef.current.play().catch(()=>{}); }
+            setElapsed((s)=>s+1);
+            setRecent((arr) => [...arr, bpm].slice(-180)); // sista 3 min
+            if (beep && tickRef.current) tickRef.current.play().catch(()=>{});
             if (beep && (bpm < zone.targetMin || bpm > zone.targetMax) && warnRef.current) {
               warnRef.current.play().catch(()=>{});
             }
@@ -101,31 +61,23 @@ index_html = r'''<!doctype html>
           return () => clearInterval(id);
         }, [isRunning, bpm, zone.targetMin, zone.targetMax, beep]);
 
+        // Kortkommandon
         useEffect(() => {
           const onKey = (e) => {
-            if (e.key === " ") {
-              e.preventDefault();
-              toggleRun();
-            } else if (e.key.toLowerCase() === "f") {
-              toggleFullscreen();
-            } else if (e.key.toLowerCase() === "s") {
-              saveLap();
-            } else if (e.key === "ArrowUp") {
-              setBpm((b) => b + (e.shiftKey ? 5 : 1));
-            } else if (e.key === "ArrowDown") {
-              setBpm((b) => Math.max(0, b - (e.shiftKey ? 5 : 1)));
-            }
+            if (e.key === " ") { e.preventDefault(); setIsRunning(r=>!r); }
+            else if (e.key.toLowerCase() === "f") toggleFullscreen();
+            else if (e.key.toLowerCase() === "s") saveLap();
+            else if (e.key === "ArrowUp") setBpm(b => b + (e.shiftKey ? 5 : 1));
+            else if (e.key === "ArrowDown") setBpm(b => Math.max(0, b - (e.shiftKey ? 5 : 1)));
           };
           window.addEventListener("keydown", onKey);
           return () => window.removeEventListener("keydown", onKey);
         }, []);
 
-        const zoneColor = useMemo(() => pickZoneColor(bpm, zone), [bpm, zone]);
+        const zoneColor = useMemo(()=>pickZoneColor(bpm, zone), [bpm, zone]);
 
-        function toggleRun() { setIsRunning((r) => !r); }
-        function resetTimer() { setIsRunning(false); setElapsed(0); setRecent([]); }
-
-        function saveLap() {
+        function resetTimer(){ setIsRunning(false); setElapsed(0); setRecent([]); }
+        function saveLap(){
           const payload = {
             id: cryptoRandom(),
             date: new Date().toISOString(),
@@ -136,33 +88,21 @@ index_html = r'''<!doctype html>
             notes,
             tags: parseTags(tagInput),
           };
-          setSessions((s) => [payload, ...s].slice(0, 200));
+          setSessions(s => [payload, ...s].slice(0, 200));
           setTagInput("");
         }
-
-        function clearSessions() {
-          if (!confirm("Ta bort alla pass?")) return;
-          setSessions([]);
-        }
-
-        function exportCSV() {
+        function exportCSV(){
           const header = ["date","duration_sec","avg_bpm","min_bpm","max_bpm","tags","notes"];
-          const rows = sessions.map((s) => [
-            s.date,
-            String(s.durationSec),
-            String(s.avgBpm),
-            String(s.minBpm),
-            String(s.maxBpm),
-            (s.tags || []).join("|"),
-            (s.notes || "").replaceAll("\\n", " ")
+          const rows = sessions.map(s => [
+            s.date, s.durationSec, s.avgBpm, s.minBpm, s.maxBpm,
+            (s.tags||[]).join("|"),
+            (s.notes||"").replaceAll("\n"," ")
           ]);
-          const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\\n");
+          const csv = [header, ...rows].map(r=>r.map(csvEscape).join(",")).join("\n");
           downloadText(`pulse_sessions_${new Date().toISOString().slice(0,10)}.csv`, csv);
         }
-
-        function addQuick(n) { setBpm((b) => Math.max(0, b + n)); }
-
-        function toggleFullscreen() {
+        function addQuick(n){ setBpm(b => Math.max(0, b + n)); }
+        function toggleFullscreen(){
           const el = document.documentElement;
           if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
           else if (document.exitFullscreen) document.exitFullscreen();
@@ -172,8 +112,8 @@ index_html = r'''<!doctype html>
           <div className="min-h-screen w-full bg-slate-950 text-slate-100 p-4 sm:p-6 md:p-8 select-none">
             <audio ref={tickRef} preload="auto" src={BEEP_TICK} />
             <audio ref={warnRef} preload="auto" src={BEEP_WARN} />
-            <audio ref={beatRef} preload="auto" src={BEEP_BEAT} />
 
+            {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <HeartIcon className="w-7 h-7" />
@@ -189,7 +129,9 @@ index_html = r'''<!doctype html>
               </div>
             </div>
 
+            {/* Grid top */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              {/* Big BPM */}
               <div className="lg:col-span-1 bg-slate-900 rounded-2xl p-5 shadow-xl">
                 <div className="flex items-start justify-between">
                   <div>
@@ -222,6 +164,7 @@ index_html = r'''<!doctype html>
                 </div>
               </div>
 
+              {/* Zones */}
               <div className="lg:col-span-2 bg-slate-900 rounded-2xl p-5 shadow-xl">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm text-slate-400">Zoner</div>
@@ -240,6 +183,7 @@ index_html = r'''<!doctype html>
               </div>
             </div>
 
+            {/* Notes & Log */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
               <div className="lg:col-span-1 bg-slate-900 rounded-2xl p-5 shadow-xl">
                 <div className="text-sm text-slate-400 mb-2">Anteckningar</div>
@@ -258,7 +202,7 @@ index_html = r'''<!doctype html>
                   <div className="text-sm text-slate-400">Passlogg</div>
                   <div className="flex gap-2">
                     <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Exportera CSV</button>
-                    <button onClick={clearSessions} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Töm</button>
+                    <button onClick={()=>{ if(confirm("Ta bort alla pass?")) setSessions([]); }} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Töm</button>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -363,23 +307,20 @@ index_html = r'''<!doctype html>
         );
       }
 
-      function defaultZone() {
-        return {
-          rest: { min: 40, max: 90, color: "#22c55e" },
-          fat: { min: 91, max: 120, color: "#eab308" },
-          cardio: { min: 121, max: 150, color: "#f97316" },
-          peak: { min: 151, max: 200, color: "#ef4444" },
-          targetMin: 120, targetMax: 150,
-        };
-      }
-
-      function pickZoneColor(bpm, z) {
+      // Hjälpfunktioner
+      function defaultZone(){ return {
+        rest: { min: 40, max: 90, color: "#22c55e" },
+        fat: { min: 91, max: 120, color: "#eab308" },
+        cardio: { min: 121, max: 150, color: "#f97316" },
+        peak: { min: 151, max: 200, color: "#ef4444" },
+        targetMin: 120, targetMax: 150,
+      }; }
+      function pickZoneColor(bpm, z){
         if (bpm <= z.rest.max) return z.rest.color;
         if (bpm <= z.fat.max) return z.fat.color;
         if (bpm <= z.cardio.max) return z.cardio.color;
         return z.peak.color;
       }
-
       function avg(arr){ return arr.reduce((a,b)=>a+b,0) / (arr.length||1); }
       function mapRange(v,inMin,inMax,outMin,outMax){ if (inMax===inMin) return (outMin+outMax)/2; return outMin + (v-inMin)*(outMax-outMin)/(inMax-inMin); }
       function pct(v){ return Math.min(100, Math.max(0, (v/220)*100)); }
@@ -394,25 +335,14 @@ index_html = r'''<!doctype html>
       function loadLS(k, fallback){ try { const v = localStorage.getItem("pw_"+k); return v? JSON.parse(v): fallback } catch { return fallback } }
       function saveLS(k, v){ try { localStorage.setItem("pw_"+k, JSON.stringify(v)); } catch {} }
 
+      // Små beep-ljud (inline, base64)
       const BEEP_TICK = "data:audio/wav;base64,UklGRqkAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAChAAAAAAAAgAAA/////wAAAP///wAAAP///wAAAP///wAAAP///wAAAP///wAAAP8=";
       const BEEP_WARN = "data:audio/wav;base64,UklGRhAAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAABQAAAAAAAAgP///wAAAP7+/v7+/gAAAP7+/v7+/gAAAP7+/v7+/gAAAP7+/g==";
-      const BEEP_BEAT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAA8AAAAAAAAgP///wAAAP7+/gAAAP7+/gAAAP7+/gAAAP7+";
 
+      // Mount appen
       const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(React.createElement(PulseWhiteboard));
     </script>
   </body>
 </html>
-'''
 
-readme = r'''
-# Pulse Whiteboard (Desktop)
-
-Enkel desktop‑app (Electron) för att visa och logga puls, zoner, anteckningar och exportera CSV.
-
-## Kom igång
-1. Installera **Node.js LTS** från https://nodejs.org (om du inte redan har).
-2. Öppna terminalen i den här mappen och kör:
-   ```bash
-   npm install
-   npm start
